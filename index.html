@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My AI Agent - Simple Debug</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; }
+    #chat { height: 500px; }
+  </style>
+</head>
+<body class="bg-gray-950 text-white p-8">
+
+  <div class="max-w-3xl mx-auto">
+    <h1 class="text-4xl font-bold text-center mb-2">🚀 My AI Agent</h1>
+    <div id="status" class="text-center mb-6 p-4 bg-gray-800 rounded-3xl text-lg">🔄 Testing connection...</div>
+
+    <div id="chat" class="bg-gray-900 rounded-3xl p-6 overflow-y-auto mb-6 text-lg"></div>
+
+    <div class="flex gap-3">
+      <input id="input" type="text" 
+             class="flex-1 bg-gray-800 border border-gray-700 rounded-3xl px-6 py-4 focus:outline-none focus:border-purple-500 text-lg"
+             placeholder="Type your question here...">
+      <button onclick="sendMessage()" 
+              class="bg-purple-600 hover:bg-purple-700 px-10 rounded-3xl font-semibold">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "http://127.0.0.1:8000/api/chat";
+    let sessionId = "simple-" + Date.now();
+
+    function addMessage(role, content) {
+      const chat = document.getElementById("chat");
+      const div = document.createElement("div");
+      div.className = role === "user" ? "text-right" : "text-left";
+      div.innerHTML = `
+        <div class="${role === "user" ? 'bg-blue-600 ml-auto' : 'bg-gray-700'} inline-block max-w-[85%] px-6 py-4 rounded-3xl">
+          ${role === "assistant" ? marked.parse(content) : content}
+        </div>`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function checkConnection() {
+      try {
+        const res = await fetch("http://127.0.0.1:8000/");
+        if (res.ok) {
+          document.getElementById("status").innerHTML = "✅ Backend Connected! Groq is ready 🔥 Type and click Send";
+          document.getElementById("status").classList.add("text-green-400");
+        }
+      } catch (e) {
+        document.getElementById("status").innerHTML = "❌ Cannot reach backend.<br>1. Keep python main.py running<br>2. Open this page with Live Server";
+        document.getElementById("status").classList.add("text-red-400");
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("input");
+      const msg = input.value.trim();
+      if (!msg) return;
+
+      addMessage("user", msg);
+      input.value = "";
+
+      addMessage("assistant", "Thinking... ⏳");
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: msg, session_id: sessionId })
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullAnswer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          fullAnswer += decoder.decode(value, { stream: true });
+        }
+
+        // Show the final answer
+        const lastMessage = document.getElementById("chat").lastElementChild;
+        if (lastMessage) {
+          lastMessage.querySelector("div").innerHTML = marked.parse(fullAnswer);
+        }
+      } catch (err) {
+        const lastMessage = document.getElementById("chat").lastElementChild;
+        if (lastMessage) lastMessage.querySelector("div").innerHTML = "❌ Error: " + err.message;
+        console.error(err);
+      }
+    }
+
+    // Start
+    window.onload = () => {
+      checkConnection();
+      addMessage("assistant", "Hi! I'm your AI agent. Ask me anything 😊");
+    };
+
+    // Press Enter to send
+    document.getElementById("input").addEventListener("keypress", e => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
